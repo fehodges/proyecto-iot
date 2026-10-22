@@ -1,0 +1,16 @@
+# Grafana reemplaza ${...} con las variables del .env
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB
+    uid: influxdb-sensores
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    isDefault: true
+    jsonData:
+      version: Flux
+      organization: ${DOCKER_INFLUXDB_INIT_ORG}
+      defaultBucket: ${DOCKER_INFLUXDB_INIT_BUCKET}
+    secureJsonData:
+      token: ${DOCKER_INFLUXDB_INIT_ADMIN_TOKEN}

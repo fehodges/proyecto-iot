@@ -1,0 +1,182 @@
+# Reglas de alerta del datacenter. Grafana las carga solas al arrancar.
+# Se ven en Grafana -> Alerting -> Alert rules (carpeta Datacenter).
+# Cada regla: A = consulta a InfluxDB, B = último valor, C = umbral.
+# Nota: en estos archivos Grafana reemplaza $VARIABLE por variables de entorno;
+# por eso las plantillas de las alertas usan $$labels y $$values.
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: datacenter
+    folder: Datacenter
+    interval: 30s
+    rules:
+      # ---------------------------------------------------------------
+      - uid: dc-temperatura-alta
+        title: Temperatura alta (sobre 30 °C)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: influxdb-sensores
+            model:
+              refId: A
+              query: |
+                from(bucket: "sensores")
+                  |> range(start: -5m)
+                  |> filter(fn: (r) => r._measurement == "temperatura" and r._field == "valor")
+                  |> keep(columns: ["_time", "_value", "sensor", "cliente", "ubicacion"])
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [30] }
+        for: 1m
+        noDataState: OK
+        execErrState: Error
+        labels: { severidad: advertencia }
+        annotations:
+          summary: "Sobrecalentamiento en {{ $$labels.ubicacion }}"
+          description: "El sensor {{ $$labels.sensor }} marca {{ $$values.B }} °C (umbral 30 °C)."
+
+      # ---------------------------------------------------------------
+      - uid: dc-humedad-alta
+        title: Humedad alta (sobre 70 %)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: influxdb-sensores
+            model:
+              refId: A
+              query: |
+                from(bucket: "sensores")
+                  |> range(start: -5m)
+                  |> filter(fn: (r) => r._measurement == "humedad" and r._field == "valor")
+                  |> keep(columns: ["_time", "_value", "sensor", "cliente", "ubicacion"])
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [70] }
+        for: 2m
+        noDataState: OK
+        execErrState: Error
+        labels: { severidad: advertencia }
+        annotations:
+          summary: "Riesgo de condensación en {{ $$labels.ubicacion }}"
+          description: "El sensor {{ $$labels.sensor }} marca {{ $$values.B }} % de humedad (umbral 70 %)."
+
+      # ---------------------------------------------------------------
+      - uid: dc-gas-humo
+        title: Gas o humo detectado (MQ-2 sobre 400)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 120, to: 0 }
+            datasourceUid: influxdb-sensores
+            model:
+              refId: A
+              query: |
+                from(bucket: "sensores")
+                  |> range(start: -2m)
+                  |> filter(fn: (r) => r._measurement == "gas" and r._field == "valor")
+                  |> keep(columns: ["_time", "_value", "sensor", "cliente", "ubicacion"])
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [400] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severidad: critica }
+        annotations:
+          summary: "Gas o humo en {{ $$labels.ubicacion }}"
+          description: "El MQ-2 del sensor {{ $$labels.sensor }} marca {{ $$values.B }} (umbral 400). Posible combustión incipiente."
+
+      # ---------------------------------------------------------------
+      - uid: dc-llama
+        title: FUEGO detectado
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 120, to: 0 }
+            datasourceUid: influxdb-sensores
+            model:
+              refId: A
+              query: |
+                from(bucket: "sensores")
+                  |> range(start: -2m)
+                  |> filter(fn: (r) => r._measurement == "llama" and r._field == "valor")
+                  |> keep(columns: ["_time", "_value", "sensor", "cliente", "ubicacion"])
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: last }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: gt, params: [0.5] }
+        for: 0s
+        noDataState: OK
+        execErrState: Error
+        labels: { severidad: critica }
+        annotations:
+          summary: "FUEGO en {{ $$labels.ubicacion }}"
+          description: "El sensor de llama de {{ $$labels.sensor }} detectó fuego."
+
+      # ---------------------------------------------------------------
+      - uid: dc-sin-datos
+        title: Dispositivo sin datos (más de 2 minutos)
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 120, to: 0 }
+            datasourceUid: influxdb-sensores
+            model:
+              refId: A
+              query: |
+                from(bucket: "sensores")
+                  |> range(start: -2m)
+                  |> filter(fn: (r) => r._measurement == "gas" and r._field == "valor")
+                  |> keep(columns: ["_time", "_value", "sensor", "cliente", "ubicacion"])
+          - refId: B
+            datasourceUid: __expr__
+            model: { refId: B, type: reduce, expression: A, reducer: count }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+        for: 0s
+        noDataState: Alerting
+        execErrState: Error
+        labels: { severidad: critica }
+        annotations:
+          summary: "El dispositivo dejó de enviar datos"
+          description: "No llegan lecturas hace más de 2 minutos: revisar WiFi, energía o el servidor."

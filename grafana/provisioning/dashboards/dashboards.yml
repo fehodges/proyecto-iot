@@ -1,0 +1,9 @@
+apiVersion: 1
+
+providers:
+  - name: proyecto-iot
+    folder: Datacenter
+    type: file
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
