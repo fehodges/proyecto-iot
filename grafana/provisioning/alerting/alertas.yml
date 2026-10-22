@@ -1,8 +1,6 @@
 # Reglas de alerta del datacenter. Grafana las carga solas al arrancar.
 # Se ven en Grafana -> Alerting -> Alert rules (carpeta Datacenter).
 # Cada regla: A = consulta a InfluxDB, B = último valor, C = umbral.
-# Nota: en estos archivos Grafana reemplaza $VARIABLE por variables de entorno;
-# por eso las plantillas de las alertas usan $$labels y $$values.
 apiVersion: 1
 
 groups:
@@ -42,8 +40,8 @@ groups:
         execErrState: Error
         labels: { severidad: advertencia }
         annotations:
-          summary: "Sobrecalentamiento en {{ $$labels.ubicacion }}"
-          description: "El sensor {{ $$labels.sensor }} marca {{ $$values.B }} °C (umbral 30 °C)."
+          summary: "Sobrecalentamiento en {{ $labels.ubicacion }}"
+          description: "El sensor {{ $labels.sensor }} marca {{ $values.B }} °C (umbral 30 °C)."
 
       # ---------------------------------------------------------------
       - uid: dc-humedad-alta
@@ -76,8 +74,8 @@ groups:
         execErrState: Error
         labels: { severidad: advertencia }
         annotations:
-          summary: "Riesgo de condensación en {{ $$labels.ubicacion }}"
-          description: "El sensor {{ $$labels.sensor }} marca {{ $$values.B }} % de humedad (umbral 70 %)."
+          summary: "Riesgo de condensación en {{ $labels.ubicacion }}"
+          description: "El sensor {{ $labels.sensor }} marca {{ $values.B }} % de humedad (umbral 70 %)."
 
       # ---------------------------------------------------------------
       - uid: dc-gas-humo
@@ -110,8 +108,8 @@ groups:
         execErrState: Error
         labels: { severidad: critica }
         annotations:
-          summary: "Gas o humo en {{ $$labels.ubicacion }}"
-          description: "El MQ-2 del sensor {{ $$labels.sensor }} marca {{ $$values.B }} (umbral 400). Posible combustión incipiente."
+          summary: "Gas o humo en {{ $labels.ubicacion }}"
+          description: "El MQ-2 del sensor {{ $labels.sensor }} marca {{ $values.B }} (umbral 400). Posible combustión incipiente."
 
       # ---------------------------------------------------------------
       - uid: dc-llama
@@ -144,8 +142,8 @@ groups:
         execErrState: Error
         labels: { severidad: critica }
         annotations:
-          summary: "FUEGO en {{ $$labels.ubicacion }}"
-          description: "El sensor de llama de {{ $$labels.sensor }} detectó fuego."
+          summary: "FUEGO en {{ $labels.ubicacion }}"
+          description: "El sensor de llama de {{ $labels.sensor }} detectó fuego."
 
       # ---------------------------------------------------------------
       - uid: dc-sin-datos
