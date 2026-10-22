@@ -7,7 +7,7 @@
   Sensores:
     DHT11            -> temperatura y humedad   (pin D5)
     Sensor de llama  -> fuego visible           (pin D6, salida DO)
-    MQ-2             -> gas / humo              (pin A0, salida AO con resistencia 100 kΩ)
+    MQ-2             -> gas / humo              (pin A0, salida AO con divisor 2,2k + 2,2k)
 
   Funcionamiento:
     1. Primer encendido (o sin configuración): crea la red WiFi SENSOR-XXXX.
@@ -37,7 +37,7 @@
 // ---------------- Pines ----------------
 #define PIN_DHT    D5      // DHT11, pin out / S
 #define PIN_FLAMA  D6      // sensor de llama, pin DO
-#define PIN_GAS    A0      // MQ-2, pin AO (a través de la resistencia de 100 kΩ)
+#define PIN_GAS    A0      // MQ-2, pin AO a través del divisor (2 resistencias de 2,2 kΩ)
 #define PIN_FLASH  D3      // botón FLASH que ya trae la placa (no se conecta nada)
 
 #define TIPO_DHT DHT11

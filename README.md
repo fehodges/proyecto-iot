@@ -97,27 +97,41 @@ docker compose exec postgres psql -U iot -d iot -c \
 
 ## 3. Armar el dispositivo
 
-Diagrama completo: `docs/diagrama-sensores.png`.
+Diagramas: `docs/diagrama-sensores.png` (conexiones) y `docs/detalle-resistencias.png` (divisor del MQ-2).
 
-**Materiales:** NodeMCU, DHT11, MQ-2, sensor de llama, 1 resistencia de 100 kΩ (marrón-negro-amarillo), protoboard y cables. El Arduino Uno no se usa porque no tiene WiFi.
+**Materiales:** NodeMCU, DHT11, MQ-2, sensor de llama, 2 resistencias **iguales** de 2,2 kΩ (rojo-rojo-rojo), protoboard y cables. El Arduino Uno no se usa porque no tiene WiFi.
 
 > **Importante:** el NodeMCU trabaja a **3,3 V**. El DHT11 y el sensor de llama se alimentan desde **3V**; solo el MQ-2 va a 5 V (**VU**).
 
-El NodeMCU va **fuera de la protoboard** (es muy ancho y la taparía entera), conectado con cables hembra-macho. Usen solo la **mitad derecha** de la protoboard (números 31 a 60): las líneas + y − están cortadas cerca del 30.
+- El NodeMCU va **fuera de la protoboard** (es muy ancho y la taparía entera), conectado con cables hembra-macho.
+- Las líneas + y − de la protoboard están cortadas cerca del 30: dos **puentes** (rojo + con +, negro − con −) unen ambas mitades para usar toda la protoboard.
+- Los sensores van **separados**: el MQ-2 se calienta y, pegado al DHT11, altera la temperatura. El MQ-2 puede ir fuera de la protoboard con cables hembra-macho.
 
 | Componente | Pin del componente | Conexión |
 |---|---|---|
 | **NodeMCU** | 3V / G | línea **roja (+)** / línea **azul (−)** |
-| **DHT11** (C45–C47) | + / out / − | línea roja / **D5** / línea azul |
-| **Sensor de llama** (C50–C53) | AO / GND / VCC / DO | nada / línea azul / línea roja / **D6** |
-| **MQ-2** (C56–C59) | VCC / GND / DO | **VU** del NodeMCU / línea azul / nada |
-| **MQ-2** | AO | **resistencia 100 kΩ (E59→F59)**, y de **H59** a **A0** |
+| **Puentes** | + col. 30 → + col. 32 · − col. 30 → − col. 34 | unen las dos mitades |
+| **DHT11** (C5–C7) | + / out / − | línea roja / **D5** / línea azul |
+| **Sensor de llama** (C25–C28) | AO / DO / GND / VCC | nada / **D6** / línea azul / línea roja |
+| **MQ-2** (C50–C53 o fuera) | AO / DO / GND / VCC | **divisor de voltaje → A0** / nada / línea azul / **VU** del NodeMCU |
+
+**Divisor de voltaje del MQ-2** (la salida AO llega a casi 5 V y A0 acepta hasta 3,2 V):
+
+```
+AO del MQ-2 ── resistencia 2,2 kΩ ──┬── A0 del NodeMCU
+                                    │
+                             resistencia 2,2 kΩ
+                                    │
+                                   GND
+```
+
+Con dos resistencias iguales, a A0 llega la mitad del voltaje (máximo 2,5 V).
 
 Notas:
 
 - Los pines de cada sensor van en la **misma letra** y en **números seguidos** (cada pin en su propio número). Los cables salen de la fila A del mismo número.
-- **Resistencia de 100 kΩ en AO:** la salida del MQ-2 puede llegar a casi 5 V y A0 acepta hasta 3,2 V.
-- El orden de los pines puede variar entre módulos: guíense por lo impreso en cada uno.
+- El sensor de llama y el MQ-2 tienen el mismo orden impreso: **AO · DO · GND · VCC**. El DHT11: **+ · out · −**. Si su módulo es distinto, guíense por lo impreso.
+- Las patas de las resistencias no deben tocarse entre sí ni tocar otras patas.
 
 ## 4. Cargar el firmware
 
@@ -196,7 +210,7 @@ También sirve **Email** (requiere configurar SMTP en Grafana) o **Webhook**.
 
 ## 8. Calibración
 
-- **MQ-2:** déjenlo encendido unos minutos. Anoten el valor de `Gas` en aire limpio y con gas de encendedor **sin prender**. Pongan ese valor intermedio en `GAS_AVISO` del firmware, en la regla "Gas o humo" de `alertas.yml` y en el umbral del dashboard.
+- **MQ-2:** con el divisor, en aire limpio debería marcar entre 30 y 300 aprox. Déjenlo encendido unos minutos. Anoten el valor de `Gas` en aire limpio y con gas de encendedor **sin prender**. Pongan ese valor intermedio en `GAS_AVISO` del firmware, en la regla "Gas o humo" de `alertas.yml` y en el umbral del dashboard.
 - **Sensor de llama:** giren el potenciómetro azul hasta que el LED del módulo se apague sin llama y se prenda con un encendedor a 20–30 cm. Si el Monitor Serie dice `Llama: SI` sin fuego, cambien `FLAMA_DETECTADA` a `HIGH`.
 
 Prueben con fuego y gas solo en pequeñas cantidades, lejos de papeles y con supervisión.
@@ -208,7 +222,8 @@ Prueben con fuego y gas solo en pequeñas cantidades, lejos de papeles y con sup
 | `error de conexión: connection refused` | IP o puerto del servidor; Security Group / firewall; `docker compose ps` |
 | `403 sensor no registrado` | El nombre del sensor o cliente del portal no está en la tabla `sensores` |
 | `DHT11: error de lectura` | Cable S en D5 y alimentación en 3V3 |
-| Gas siempre en 1023 | Falta la resistencia en AO, o el MQ-2 recién encendido (esperar) |
+| Gas siempre en 0 | La resistencia de arriba del divisor no toca el cable AO, o A0 quedó unido a GND |
+| Gas cerca de 1023 | La resistencia de abajo del divisor no llega a GND: no acercar gas hasta corregirlo |
 | El WiFi se corta | Fuente USB débil: el MQ-2 consume ~150 mA; usen otro cable o puerto |
 | Grafana sin datos | Elegir cliente y sensor arriba; rango "Last 1 hour"; `docker compose logs api` |
 | No aparece la red SENSOR-XXXX | Mantengan el botón FLASH 5 s para borrar la configuración |
