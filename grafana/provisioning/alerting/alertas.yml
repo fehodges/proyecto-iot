@@ -79,7 +79,7 @@ groups:
 
       # ---------------------------------------------------------------
       - uid: dc-gas-humo
-        title: Gas o humo detectado (MQ-2 sobre 400)
+        title: Gas o humo detectado (MQ-2 sobre 800)
         condition: C
         data:
           - refId: A
@@ -102,14 +102,14 @@ groups:
               type: threshold
               expression: B
               conditions:
-                - evaluator: { type: gt, params: [400] }
+                - evaluator: { type: gt, params: [800] }
         for: 0s
         noDataState: OK
         execErrState: Error
         labels: { severidad: critica }
         annotations:
           summary: "Gas o humo en {{ $labels.ubicacion }}"
-          description: "El MQ-2 del sensor {{ $labels.sensor }} marca {{ $values.B }} (umbral 400). Posible combustión incipiente."
+          description: "El MQ-2 del sensor {{ $labels.sensor }} marca {{ $values.B }} (umbral 800). Posible combustión incipiente."
 
       # ---------------------------------------------------------------
       - uid: dc-llama

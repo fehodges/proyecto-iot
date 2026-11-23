@@ -224,11 +224,11 @@
               },
               {
                 "color": "orange",
-                "value": 300
+                "value": 600
               },
               {
                 "color": "red",
-                "value": 400
+                "value": 800
               }
             ]
           },
@@ -500,7 +500,7 @@
               },
               {
                 "color": "red",
-                "value": 400
+                "value": 800
               }
             ]
           },

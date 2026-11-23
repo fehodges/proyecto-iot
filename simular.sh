@@ -16,10 +16,10 @@ enviar() {
 for i in $(seq 1 30); do
   T=$(awk -v s=$RANDOM 'BEGIN { srand(s); printf "%.1f", 22 + rand() * 10 }')   # 22 a 32 °C
   H=$(awk -v s=$RANDOM 'BEGIN { srand(s); printf "%.0f", 45 + rand() * 30 }')   # 45 a 75 %
-  G=$(awk -v s=$RANDOM 'BEGIN { srand(s); printf "%.0f", 150 + rand() * 150 }') # 150 a 300
+  G=$(awk -v s=$RANDOM 'BEGIN { srand(s); printf "%.0f", 60 + rand() * 140 }')  # 60 a 200
   L=0
   # Entre la lectura 20 y 23 se simula un incendio: sube el gas y aparece llama
-  if [ "$i" -ge 20 ] && [ "$i" -le 23 ]; then G=$((600 + RANDOM % 200)); L=1; fi
+  if [ "$i" -ge 20 ] && [ "$i" -le 23 ]; then G=$((850 + RANDOM % 150)); L=1; fi
 
   enviar temperatura "$T" C
   enviar humedad "$H" %

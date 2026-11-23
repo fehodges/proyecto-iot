@@ -7,7 +7,7 @@
   Sensores:
     DHT11            -> temperatura y humedad   (pin D5)
     Sensor de llama  -> fuego visible           (pin D6, salida DO)
-    MQ-2             -> gas / humo              (pin A0, salida AO con divisor 2,2k + 2,2k)
+    MQ-2             -> gas / humo              (pin A0, salida AO directa, sin resistencias)
 
   Funcionamiento:
     1. Primer encendido (o sin configuración): crea la red WiFi SENSOR-XXXX.
@@ -16,6 +16,8 @@
     2. Guarda la configuración en la memoria flash y se conecta a tu WiFi.
     3. Cada <ciclo> segundos lee los sensores y envía 4 POST JSON a
        <servidor>/api/v1/lecturas (temperatura, humedad, gas y llama).
+       El servidor puede ser http://IP:8000 o https://nombre.duckdns.org:
+       si empieza con https, la conexión va cifrada (TLS).
     4. Si aparece llama o el gas sube de golpe, envía de inmediato,
        sin esperar el ciclo, para que Grafana alerte antes.
 
@@ -29,6 +31,7 @@
 
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <WiFiManager.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
@@ -37,13 +40,14 @@
 // ---------------- Pines ----------------
 #define PIN_DHT    D5      // DHT11, pin out / S
 #define PIN_FLAMA  D6      // sensor de llama, pin DO
-#define PIN_GAS    A0      // MQ-2, pin AO a través del divisor (2 resistencias de 2,2 kΩ)
+#define PIN_GAS    A0      // MQ-2, pin AO conectado directo (sin divisor)
 #define PIN_FLASH  D3      // botón FLASH que ya trae la placa (no se conecta nada)
 
 #define TIPO_DHT DHT11
 
 const int FLAMA_DETECTADA = LOW;   // cambiar a HIGH si tu módulo funciona al revés
-const int GAS_AVISO = 400;         // sobre este valor se envía de inmediato
+const int GAS_AVISO = 800;         // sobre este valor se envía de inmediato
+                                   // (sin divisor las lecturas son el doble que con él)
 
 // ---------------- Configuración (se edita en el portal cautivo) ----------------
 struct Config {
@@ -120,7 +124,7 @@ void limpiarServidor() {
 void iniciarWiFi() {
   WiFiManager wm;
 
-  WiFiManagerParameter pServidor("servidor", "Servidor (http://IP:8000)", cfg.servidor, sizeof(cfg.servidor) - 1);
+  WiFiManagerParameter pServidor("servidor", "Servidor (https://nombre.duckdns.org o http://IP:8000)", cfg.servidor, sizeof(cfg.servidor) - 1);
   WiFiManagerParameter pCiclo("ciclo", "Ciclo de envío (segundos)", cfg.ciclo, sizeof(cfg.ciclo) - 1);
   WiFiManagerParameter pSensor("sensor", "Nombre del sensor", cfg.sensor, sizeof(cfg.sensor) - 1);
   WiFiManagerParameter pCliente("cliente", "ID cliente", cfg.cliente, sizeof(cfg.cliente) - 1);
@@ -200,11 +204,20 @@ bool enviarLectura(const char *tipo, float valor, const char *unidad) {
   String json;
   serializeJson(doc, json);
 
-  WiFiClient cliente;
+  String url = String(cfg.servidor) + "/api/v1/lecturas";
+  WiFiClient clienteHttp;
+  WiFiClientSecure clienteHttps;
   HTTPClient http;
-  http.begin(cliente, String(cfg.servidor) + "/api/v1/lecturas");
+  if (url.startsWith("https://")) {
+    // HTTPS: los datos viajan cifrados. setInsecure() cifra la conexión pero no
+    // valida el certificado (el ESP8266 no tiene reloj ni lista de autoridades).
+    clienteHttps.setInsecure();
+    http.begin(clienteHttps, url);
+  } else {
+    http.begin(clienteHttp, url);
+  }
   http.addHeader("Content-Type", "application/json");
-  http.setTimeout(5000);
+  http.setTimeout(8000);           // el saludo TLS tarda un poco más
   int codigo = http.POST(json);
 
   Serial.print("  POST ");

@@ -1,0 +1,18 @@
+# Caddy: entrada HTTPS del sistema.
+# Pide y renueva solo el certificado de Let's Encrypt para el dominio de DuckDNS.
+# DOMINIO viene del archivo .env (ej. monitoreo-dc.duckdns.org).
+
+{$DOMINIO} {
+	encode gzip
+
+	# La API: lo que envía el NodeMCU y su documentación
+	@api path /api/* /docs /openapi.json /salud
+	handle @api {
+		reverse_proxy api:8000
+	}
+
+	# Todo lo demás es Grafana
+	handle {
+		reverse_proxy grafana:3000
+	}
+}

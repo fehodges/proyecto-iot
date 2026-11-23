@@ -36,5 +36,5 @@ INSERT INTO sensores VALUES
 INSERT INTO alertas (sensor_id, tipo, condicion, umbral, destinatario) VALUES
   ('dc-rack-01', 'temperatura', 'mayor', 30,  'lab@duoc.cl'),
   ('dc-rack-01', 'humedad',     'mayor', 70,  'lab@duoc.cl'),
-  ('dc-rack-01', 'gas',         'mayor', 400, 'lab@duoc.cl'),
+  ('dc-rack-01', 'gas',         'mayor', 800, 'lab@duoc.cl'),
   ('dc-rack-01', 'llama',       'mayor', 0.5, 'lab@duoc.cl');

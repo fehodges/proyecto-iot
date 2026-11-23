@@ -3,18 +3,18 @@
 Un NodeMCU (ESP8266) mide temperatura, humedad, gas/humo y llama dentro de un gabinete de servidores. Envía las lecturas por WiFi a una API en Docker, que las valida y las guarda en InfluxDB. Grafana las muestra en un dashboard y **genera las alertas**. El dispositivo solo mide y envía: no tiene LEDs ni botones.
 
 ```
-NodeMCU + sensores ──POST JSON──▶ API FastAPI (:8000) ──▶ InfluxDB (lecturas)
-  portal cautivo                       │                       ▲
-                                       ▼                       │
-                                  PostgreSQL              Grafana (:3000)
-                          (clientes, sensores, alertas)
+NodeMCU + sensores ──HTTPS──▶ Caddy (:443) ──▶ API FastAPI (:8000) ──▶ InfluxDB (lecturas)
+  portal cautivo          nombre.duckdns.org          │                       ▲
+                                                      ▼                       │
+                                                 PostgreSQL              Grafana (:3000)
+                                         (clientes, sensores, alertas)
 ```
 
 | Sensor | Qué vigila | Tipo de lectura | Alerta |
 |---|---|---|---|
 | DHT11 | Sobrecalentamiento del gabinete | `temperatura` (°C) | sobre 30 °C |
 | DHT11 | Riesgo de condensación | `humedad` (% HR) | sobre 70 % |
-| MQ-2 | Combustión incipiente (gas/humo) | `gas` (0–1023) | sobre 400 |
+| MQ-2 | Combustión incipiente (gas/humo) | `gas` (0–1023) | sobre 800 |
 | Sensor de llama | Incendio declarado | `llama` (0 o 1) | 1 |
 
 ## Estructura
@@ -24,6 +24,7 @@ proyecto-iot/
 ├── docker-compose.yml
 ├── .env.example
 ├── simular.sh                  # simula el dispositivo con curl
+├── caddy/Caddyfile             # HTTPS con Let's Encrypt (dominio DuckDNS)
 ├── api/                        # FastAPI: recibe y valida
 ├── db/init.sql                 # clientes, sensores y reglas de alerta
 ├── grafana/
@@ -54,7 +55,16 @@ curl http://localhost:8000/salud     # influx y postgres deben decir true
 
 Abrir Grafana en `http://<ip>:3000` (usuario `admin`, clave `GF_SECURITY_ADMIN_PASSWORD` del `.env`). El dashboard **Datacenter › Monitoreo Datacenter** ya viene conectado a InfluxDB: no hay que configurar nada a mano. Arriba elijan el cliente y el sensor.
 
-En EC2 abran en el Security Group solo los puertos 22 (su IP), 8000 y 3000, como en el lab.
+En EC2 abran en el Security Group los puertos 22 (su IP), 80 y 443. Con HTTPS funcionando (sección 1.1), los puertos 8000 y 3000 se pueden cerrar.
+
+### 1.1 HTTPS con DuckDNS
+
+1. En [duckdns.org](https://www.duckdns.org) inicien sesión, creen un subdominio (ej. `monitoreo-dc`) y en **current ip** pongan la **IP elástica** de la EC2 → **update ip**.
+2. En el Security Group abran **80** y **443** (origen `0.0.0.0/0`). El 80 lo usa Let's Encrypt para validar el dominio.
+3. En la EC2 agreguen al `.env` la línea `DOMINIO=monitoreo-dc.duckdns.org` y ejecuten `docker compose up -d`.
+4. `docker compose logs caddy` debe decir `certificate obtained successfully`. Abran `https://monitoreo-dc.duckdns.org`: aparece Grafana con candado.
+
+Caddy reparte el tráfico: `/api/*`, `/docs` y `/salud` van a la API; todo lo demás va a Grafana. El certificado se renueva solo.
 
 ## 2. Contrato de la API
 
@@ -97,9 +107,9 @@ docker compose exec postgres psql -U iot -d iot -c \
 
 ## 3. Armar el dispositivo
 
-Diagramas: `docs/diagrama-sensores.png` (conexiones) y `docs/detalle-resistencias.png` (divisor del MQ-2).
+Diagramas: `docs/diagrama-sensores.png` (conexiones) y `docs/detalle-resistencias.png` (divisor del MQ-2, ya no se usa: el MQ-2 va directo a A0).
 
-**Materiales:** NodeMCU, DHT11, MQ-2, sensor de llama, 2 resistencias **iguales** de 2,2 kΩ (rojo-rojo-rojo), protoboard y cables. El Arduino Uno no se usa porque no tiene WiFi.
+**Materiales:** NodeMCU, DHT11, MQ-2, sensor de llama y cables dupont hembra-hembra. El Arduino Uno no se usa porque no tiene WiFi.
 
 > **Importante:** el NodeMCU trabaja a **3,3 V**. El DHT11 y el sensor de llama se alimentan desde **3V**; solo el MQ-2 va a 5 V (**VU**).
 
@@ -113,25 +123,14 @@ Diagramas: `docs/diagrama-sensores.png` (conexiones) y `docs/detalle-resistencia
 | **Puentes** | + col. 30 → + col. 32 · − col. 30 → − col. 34 | unen las dos mitades |
 | **DHT11** (C5–C7) | + / out / − | línea roja / **D5** / línea azul |
 | **Sensor de llama** (C25–C28) | AO / DO / GND / VCC | nada / **D6** / línea azul / línea roja |
-| **MQ-2** (C50–C53 o fuera) | AO / DO / GND / VCC | **divisor de voltaje → A0** / nada / línea azul / **VU** del NodeMCU |
+| **MQ-2** (C50–C53 o fuera) | AO / DO / GND / VCC | **A0** (directo) / nada / línea azul / **VU** del NodeMCU |
 
-**Divisor de voltaje del MQ-2** (la salida AO llega a casi 5 V y A0 acepta hasta 3,2 V):
-
-```
-AO del MQ-2 ── resistencia 2,2 kΩ ──┬── A0 del NodeMCU
-                                    │
-                             resistencia 2,2 kΩ
-                                    │
-                                   GND
-```
-
-Con dos resistencias iguales, a A0 llega la mitad del voltaje (máximo 2,5 V).
+**MQ-2 sin divisor:** AO va directo a A0. En aire limpio la salida es baja (unos 0,2 V) y A0 acepta hasta 3,3 V, así que para un prototipo en condiciones normales no hace falta divisor. Con gas o humo muy fuertes la lectura puede llegar a 1023 (saturada); la alerta se dispara igual. Si el equipo fuera a instalarse en una sala real, conviene volver a poner el divisor de dos resistencias iguales (2,2 kΩ) entre AO, A0 y GND, y dividir los umbrales de gas por 2.
 
 Notas:
 
 - Los pines de cada sensor van en la **misma letra** y en **números seguidos** (cada pin en su propio número). Los cables salen de la fila A del mismo número.
 - El sensor de llama y el MQ-2 tienen el mismo orden impreso: **AO · DO · GND · VCC**. El DHT11: **+ · out · −**. Si su módulo es distinto, guíense por lo impreso.
-- Las patas de las resistencias no deben tocarse entre sí ni tocar otras patas.
 
 ## 4. Cargar el firmware
 
@@ -156,7 +155,7 @@ Probado: compila sin errores para NodeMCU 1.0 con el core esp8266 3.1.2.
 
 | Campo | Ejemplo |
 |---|---|
-| Servidor | `http://54.12.34.56:8000` (IP elástica) o `http://192.168.1.50:8000` (su notebook) |
+| Servidor | `https://monitoreo-dc.duckdns.org` (HTTPS, sin puerto) o `http://192.168.1.50:8000` (su notebook) |
 | Ciclo de envío | `10` |
 | Nombre del sensor | `dc-rack-01` (debe existir en la tabla `sensores`) |
 | ID cliente | `cliente-007` |
@@ -182,7 +181,7 @@ Para volver a configurarlo: **mantengan presionado 5 segundos el botón FLASH** 
     POST gas -> 201 guardado
     POST llama -> 201 guardado
   ```
-- Gas y llama se revisan cada 200 ms. Si aparece llama o el gas cruza 400, se envía **de inmediato**, sin esperar el ciclo, para que Grafana alerte antes.
+- Gas y llama se revisan cada 200 ms. Si aparece llama o el gas cruza 800, se envía **de inmediato**, sin esperar el ciclo, para que Grafana alerte antes.
 - Si la API responde un error, se imprime su explicación (por ejemplo `403 {"detail":"sensor no registrado"}`) y se reintenta en el ciclo siguiente.
 
 ## 7. Alertas en Grafana
@@ -193,7 +192,7 @@ Las reglas vienen listas en `grafana/provisioning/alerting/alertas.yml` y se ven
 |---|---|---|
 | Temperatura alta | sobre 30 °C | 1 min |
 | Humedad alta | sobre 70 % | 2 min |
-| Gas o humo | MQ-2 sobre 400 | inmediato |
+| Gas o humo | MQ-2 sobre 800 | inmediato |
 | FUEGO detectado | llama = 1 | inmediato |
 | Dispositivo sin datos | nada en 2 min | inmediato |
 
@@ -210,7 +209,7 @@ También sirve **Email** (requiere configurar SMTP en Grafana) o **Webhook**.
 
 ## 8. Calibración
 
-- **MQ-2:** con el divisor, en aire limpio debería marcar entre 30 y 300 aprox. Déjenlo encendido unos minutos. Anoten el valor de `Gas` en aire limpio y con gas de encendedor **sin prender**. Pongan ese valor intermedio en `GAS_AVISO` del firmware, en la regla "Gas o humo" de `alertas.yml` y en el umbral del dashboard.
+- **MQ-2:** sin divisor, en aire limpio debería marcar entre 60 y 300 aprox. Déjenlo encendido unos minutos. Anoten el valor de `Gas` en aire limpio y con gas de encendedor **sin prender**. Pongan ese valor intermedio en `GAS_AVISO` del firmware, en la regla "Gas o humo" de `alertas.yml` y en el umbral del dashboard.
 - **Sensor de llama:** giren el potenciómetro azul hasta que el LED del módulo se apague sin llama y se prenda con un encendedor a 20–30 cm. Si el Monitor Serie dice `Llama: SI` sin fuego, cambien `FLAMA_DETECTADA` a `HIGH`.
 
 Prueben con fuego y gas solo en pequeñas cantidades, lejos de papeles y con supervisión.
@@ -222,8 +221,9 @@ Prueben con fuego y gas solo en pequeñas cantidades, lejos de papeles y con sup
 | `error de conexión: connection refused` | IP o puerto del servidor; Security Group / firewall; `docker compose ps` |
 | `403 sensor no registrado` | El nombre del sensor o cliente del portal no está en la tabla `sensores` |
 | `DHT11: error de lectura` | Cable S en D5 y alimentación en 3V3 |
-| Gas siempre en 0 | La resistencia de arriba del divisor no toca el cable AO, o A0 quedó unido a GND |
-| Gas cerca de 1023 | La resistencia de abajo del divisor no llega a GND: no acercar gas hasta corregirlo |
+| Gas siempre en 0 | El cable AO no llega a A0, o el MQ-2 no tiene 5 V en VCC (debe ir a VU) |
+| Gas cerca de 1023 en aire limpio | Esperen 2–3 min de calentamiento; si sigue, revisen que AO vaya a A0 y no a VU |
+| `error de conexión` con https | El dominio no apunta a la IP elástica, el puerto 443 está cerrado o Caddy no obtuvo el certificado (`docker compose logs caddy`) |
 | El WiFi se corta | Fuente USB débil: el MQ-2 consume ~150 mA; usen otro cable o puerto |
 | Grafana sin datos | Elegir cliente y sensor arriba; rango "Last 1 hour"; `docker compose logs api` |
 | No aparece la red SENSOR-XXXX | Mantengan el botón FLASH 5 s para borrar la configuración |
@@ -232,4 +232,4 @@ Prueben con fuego y gas solo en pequeñas cantidades, lejos de papeles y con sup
 ## Pendientes antes de producción
 
 - Autenticación del dispositivo (API key por sensor).
-- HTTPS entre el dispositivo y la API.
+- Validar el certificado en el NodeMCU (hoy usa HTTPS cifrado con `setInsecure()`, sin verificar la autoridad).

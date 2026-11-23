@@ -1,4 +1,21 @@
 services:
+  # Entrada HTTPS (puertos 80 y 443). Obtiene el certificado de Let's Encrypt solo.
+  caddy:
+    image: caddy:2.8
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data        # aquí se guarda el certificado
+      - caddy-config:/config
+    depends_on:
+      - api
+      - grafana
+    restart: unless-stopped
+
   api:
     build: ./api
     ports:
@@ -56,3 +73,5 @@ volumes:
   pg-data:
   influx-data:
   grafana-data:
+  caddy-data:
+  caddy-config:
