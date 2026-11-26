@@ -5,8 +5,9 @@
 {$DOMINIO} {
 	encode gzip
 
-	# La API: lo que envía el NodeMCU y su documentación
-	@api path /api/* /docs /openapi.json /salud
+	# La API: solo las rutas propias de FastAPI. Grafana también usa /api/...
+	# (ej. /api/dashboards), así que no se puede enviar todo /api/* a FastAPI.
+	@api path /api/v1/lecturas /docs /openapi.json /salud
 	handle @api {
 		reverse_proxy api:8000
 	}

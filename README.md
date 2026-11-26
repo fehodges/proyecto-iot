@@ -64,7 +64,7 @@ En EC2 abran en el Security Group los puertos 22 (su IP), 80 y 443. Con HTTPS fu
 3. En la EC2 agreguen al `.env` la línea `DOMINIO=monitoreo-dc.duckdns.org` y ejecuten `docker compose up -d`.
 4. `docker compose logs caddy` debe decir `certificate obtained successfully`. Abran `https://monitoreo-dc.duckdns.org`: aparece Grafana con candado.
 
-Caddy reparte el tráfico: `/api/*`, `/docs` y `/salud` van a la API; todo lo demás va a Grafana. El certificado se renueva solo.
+Caddy reparte el tráfico: `/api/v1/lecturas`, `/docs` y `/salud` van a la API; todo lo demás va a Grafana. El certificado se renueva solo.
 
 ## 2. Contrato de la API
 
