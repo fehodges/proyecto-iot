@@ -59,6 +59,9 @@ services:
     ports:
       - "3000:3000"
     env_file: .env
+    environment:
+      # Dirección pública: los enlaces de las alertas (Telegram) apuntan aquí
+      GF_SERVER_ROOT_URL: https://${DOMINIO}/
     volumes:
       - grafana-data:/var/lib/grafana
       # El datasource de InfluxDB y el dashboard se cargan solos al arrancar
